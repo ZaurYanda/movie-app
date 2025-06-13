@@ -101,11 +101,9 @@ handleRate = async (movieId, value) => {
   const rating = value;
 
   if (rating < 0.5 || rating > 10) {
-    console.error('Некорректное значение рейтинга для TMDB:', rating);
     return;
   }
 
-  console.log('Отправляемый рейтинг:', rating);
 
   try {
     const response = await fetch(
@@ -119,8 +117,8 @@ handleRate = async (movieId, value) => {
       }
     );
 
-    const data = await response.json();
-    console.log('Ответ TMDB:', response, data);
+    // const data = await response.json();
+    // console.log('Ответ TMDB:', response, data);
 
     this.setState((prevState) => ({
       ratedMap: {
