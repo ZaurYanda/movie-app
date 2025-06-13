@@ -30,7 +30,6 @@ class MovieCard extends React.Component {
     
     const { movie, onRate, isRatedTab, ratedMap, genres } = this.props;
 
-    console.log(movie);
 
     const ratingValue = isRatedTab ? movie.rating || 0 : (ratedMap && ratedMap[movie.id]) || 0;
 
@@ -78,7 +77,7 @@ class MovieCard extends React.Component {
           width: 40,
           height: 40,
           borderRadius: '50%',
-          background: '#fff', // прозрачный или белый
+          background: '#fff', 
           color: '#000',
           display: 'flex',
           alignItems: 'center',
