@@ -1,10 +1,10 @@
 import React, { Component } from 'react';
 import { Offline, Online } from 'react-detect-offline';
-import { Spin, Alert, Pagination, Tabs } from 'antd';
-import MovieList from '../MovieList/MovieList';
-import SearchBar from '../SearchBar/SearchBar';
+import { Tabs } from 'antd';
 import debounce from 'lodash/debounce';
 import ServiceContext from '../ServiceContext/ServiceContext'; 
+import SearchTab from '../SearchTab/SearchTab';
+import RatedTab from '../RatedTab/RatedTab';
 
 const API_KEY = 'b13f24cba5750ce383f8785b115df8c9';
 
@@ -29,60 +29,42 @@ class App extends Component {
     this.fetchMovies();
   }
 
-
   componentDidUpdate(prevProps, prevState) {
-  
-  if (
-    this.state.currentTab === '2' &&
-    this.state.guestSessionId &&
-    prevState.guestSessionId !== this.state.guestSessionId
-  ) {
-    this.fetchRatedMovies();
+    if (
+      this.state.currentTab === '2' &&
+      this.state.guestSessionId &&
+      prevState.guestSessionId !== this.state.guestSessionId
+    ) {
+      this.fetchRatedMovies();
+    }
   }
-}
 
   handleSearchInputChange = debounce((value) => {
-    this.setState(
-      {
-        query: value,
-        currentPage: 1,
-      },
-      () => {
-        this.fetchMovies();
-      }
-    );
+    this.setState({ query: value, currentPage: 1 }, this.fetchMovies);
   }, 500);
 
   handlePageChange = (page) => {
-    this.setState(
-      {
-        currentPage: page,
-      },
-      () => {
-        this.fetchMovies();
-      }
-    );
+    this.setState({ currentPage: page }, this.fetchMovies);
   };
 
   createGuestSession = async () => {
-  const savedSessionId = localStorage.getItem('guestSessionId');
-  if (savedSessionId) {
-    this.setState({ guestSessionId: savedSessionId });
-    return;
-  }
+    const savedSessionId = localStorage.getItem('guestSessionId');
+    if (savedSessionId) {
+      this.setState({ guestSessionId: savedSessionId });
+      return;
+    }
 
-  try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/authentication/guest_session/new?api_key=${API_KEY}`
-    );
-    const data = await response.json();
-    this.setState({ guestSessionId: data.guest_session_id });
-    localStorage.setItem('guestSessionId', data.guest_session_id); 
-  } catch (error) {
-    console.error('Ошибка гостевой сессии:', error);
-  }
-};
-
+    try {
+      const response = await fetch(
+        `https://api.themoviedb.org/3/authentication/guest_session/new?api_key=${API_KEY}`
+      );
+      const data = await response.json();
+      this.setState({ guestSessionId: data.guest_session_id });
+      localStorage.setItem('guestSessionId', data.guest_session_id);
+    } catch (error) {
+      console.error('Ошибка гостевой сессии:', error);
+    }
+  };
 
   fetchGenres = async () => {
     try {
@@ -96,107 +78,47 @@ class App extends Component {
     }
   };
 
-handleRate = async (movieId, value) => {
-  const { guestSessionId } = this.state;
-  const rating = value;
+  handleRate = async (movieId, value) => {
+    const { guestSessionId } = this.state;
+    if (value < 0.5 || value > 10) return;
 
-  if (rating < 0.5 || rating > 10) {
-    return;
-  }
+    try {
+      await fetch(
+        `https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${API_KEY}&guest_session_id=${guestSessionId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json;charset=utf-8' },
+          body: JSON.stringify({ value }),
+        }
+      );
 
+      this.setState((prevState) => ({
+        ratedMap: { ...prevState.ratedMap, [movieId]: value },
+      }));
 
-  try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${API_KEY}&guest_session_id=${guestSessionId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json;charset=utf-8',
-        },
-        body: JSON.stringify({ value: rating }),
+      if (this.state.currentTab === '2') {
+        this.fetchRatedMovies();
       }
-    );
-
-    // const data = await response.json();
-    // console.log('Ответ TMDB:', response, data);
-
-    this.setState((prevState) => ({
-      ratedMap: {
-        ...prevState.ratedMap,
-        [movieId]: rating,
-      },
-    }));
-
-    
-    if (this.state.currentTab === '2') {
-      this.fetchRatedMovies();
+    } catch (error) {
+      console.error('Ошибка голосования:', error);
     }
-  } catch (error) {
-    console.error('Ошибка голосования:', error);
-  }
-};
-
-
-
-
+  };
 
   fetchMovies = async () => {
     const { query, currentPage } = this.state;
-
     this.setState({ loading: true, error: null });
 
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(
-          query
-        )}&page=${currentPage}`
+        `https://api.themoviedb.org/3/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&page=${currentPage}`
       );
 
-      if (!response.ok) {
-        throw new Error(`Ашыбка сервера жи ес: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Ашыбка сервера: ${response.status}`);
 
       const data = await response.json();
-
       this.setState({
         movies: data.results,
         totalResults: data.total_results,
-        loading: false,
-        error: null,
-      });
-
-      console.log(data);
-    } catch (error) {
-      console.error('Ашыбка при получениииеее мувис:', error);
-
-      this.setState({
-        loading: false,
-        error:
-          error.message ||
-          'С инетом траблы у тибя братишка, проверь инет жи ес',
-      });
-    }
-  };
-
-  handleTabChange = (key) => {
-    this.setState({ currentTab: key }, () => {
-      if (key === '2') {
-        this.fetchRatedMovies();
-      }
-    });
-  };
-
-  fetchRatedMovies = async () => {
-    const { guestSessionId } = this.state;
-    this.setState({ loading: true, error: null });
-
-    try {
-      const response = await fetch(
-        `https://api.themoviedb.org/3/guest_session/${guestSessionId}/rated/movies?api_key=${API_KEY}&language=en-US&sort_by=created_at.asc`
-      );
-      const data = await response.json();
-      this.setState({
-        ratedMovies: data.results || [],
         loading: false,
         error: null,
       });
@@ -208,16 +130,31 @@ handleRate = async (movieId, value) => {
     }
   };
 
+  fetchRatedMovies = async () => {
+    const { guestSessionId } = this.state;
+    this.setState({ loading: true, error: null });
+
+    try {
+      const response = await fetch(
+        `https://api.themoviedb.org/3/guest_session/${guestSessionId}/rated/movies?api_key=${API_KEY}&language=en-US&sort_by=created_at.asc`
+      );
+      const data = await response.json();
+      this.setState({ ratedMovies: data.results || [], loading: false, error: null });
+    } catch (error) {
+      this.setState({ loading: false, error: error.message || 'Ошибка сети' });
+    }
+  };
+
+  handleTabChange = (key) => {
+    this.setState({ currentTab: key }, () => {
+      if (key === '2') this.fetchRatedMovies();
+    });
+  };
+
   render() {
-    
     const {
-      movies,
-      ratedMovies,
-      loading,
-      error,
-      currentPage,
-      totalResults,
-      genres,
+      movies, ratedMovies, loading, error, currentPage,
+      totalResults, genres, query, ratedMap, currentTab
     } = this.state;
 
     const tabsItems = [
@@ -225,108 +162,35 @@ handleRate = async (movieId, value) => {
         label: 'Search',
         key: '1',
         children: (
-          <>
-            <div
-              style={{
-                maxWidth: '1200px',
-                margin: '0 auto',
-                padding: '20px',
-              }}
-            >
-              <SearchBar onSearchChange={this.handleSearchInputChange} />
-            </div>
-
-            {loading && (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin size="large" tip="Думаем жи есть">
-                  <div style={{ height: '100px' }} />
-                </Spin>
-              </div>
-            )}
-
-            {error && (
-              <Alert
-                message="ashibka"
-                description={error}
-                type="error"
-                showIcon
-              />
-            )}
-
-            {!loading && !error && (
-              <div
-                style={{
-                  maxWidth: '1200px',
-                  margin: '0 auto',
-                  padding: '20px',
-                }}
-              >
-                <MovieList movies={movies}
-                onRate={this.handleRate}
-                isRatedTab={false}
-                ratedMap={this.state.ratedMap} 
-                genres={this.state.genres}
-                />
-              </div>
-            )}
-
-            <div
-              style={{
-                marginTop: '20px',
-                display: 'flex',
-                justifyContent: 'center',
-              }}
-            >
-              <Pagination
-                current={currentPage}
-                pageSize={20}
-                total={totalResults}
-                onChange={this.handlePageChange}
-                showSizeChanger={false}
-              />
-            </div>
-          </>
-        ),
+          <SearchTab
+            movies={movies}
+            loading={loading}
+            error={error}
+            currentPage={currentPage}
+            totalResults={totalResults}
+            query={query}
+            genres={genres}
+            ratedMap={ratedMap}
+            onSearchChange={this.handleSearchInputChange}
+            onRate={this.handleRate}
+            onPageChange={this.handlePageChange}
+          />
+        )
       },
       {
         label: 'Rated',
         key: '2',
         children: (
-          <div
-            style={{
-              maxWidth: '1200px',
-              margin: '0 auto',
-              padding: '20px',
-            }}
-          >
-            {loading && (
-              <div style={{ textAlign: 'center', padding: '50px' }}>
-                <Spin size="large" tip="Думаем жи есть">
-                  <div style={{ height: '100px' }} />
-                </Spin>
-              </div>
-            )}
-
-            {error && (
-              <Alert
-                message="ashibka"
-                description={error}
-                type="error"
-                showIcon
-              />
-            )}
-
-            {!loading && !error && (
-              <MovieList
-              movies={ratedMovies}
-              onRate={this.handleRate}
-              isRatedTab={true} 
-              genres={this.state.genres}
-              />
-            )}
-          </div>
-        ),
-      },
+          <RatedTab
+            ratedMovies={ratedMovies}
+            loading={loading}
+            error={error}
+            genres={genres}
+            ratedMap={ratedMap}
+            onRate={this.handleRate}
+          />
+        )
+      }
     ];
 
     return (
@@ -336,18 +200,13 @@ handleRate = async (movieId, value) => {
 
           <Offline>
             <div style={{ maxWidth: '600px', margin: '20px auto' }}>
-              <Alert
-                message="ashibka"
-                description="чё с твоим инетом братишкааа??"
-                type="error"
-                showIcon
-              />
+              <p style={{ color: 'red' }}>Проблемы с интернетом</p>
             </div>
           </Offline>
 
           <Online>
             <Tabs
-              defaultActiveKey="1"
+              activeKey={currentTab}
               onChange={this.handleTabChange}
               items={tabsItems}
               centered
